@@ -46,15 +46,15 @@ print_result () {
 	then
 		printf "%s${GREEN}OK${NC}\n" 
 		printf "%sOK\n" >> $ADC_OUTPUT
-	elif [ $1 -ne 0 ] && [ -z $2 ]
+	elif [ $1 -ne 0 ] && [ -z "$2" ]
 	then
 		printf "%s${RED}FAIL${NC}\n"
 		printf "%sFAIL\n" >> $ADC_OUTPUT
 		cat $ADC_ERROR
 		exit 1
 	else   
-		printf "%s${RED}FAIL${NC}\n"
-		printf "%sFAIL\n" >> $ADC_OUTPUT
+		printf "${RED}%s${NC}\n" $2
+		printf "${2}\n" >> $ADC_OUTPUT
 	fi
 }
 
@@ -101,28 +101,26 @@ print_title "Checking for updates to the hpcflow-snapshot script"
 ADC_SCRIPT=$0
 ADC_NEWSCRIPT=$ADC_SNAPSHOT_ROOT/newscript
 
-print_message "Downloading latest version"
+print_message "Checking if latest version"
 curl -s -o $ADC_NEWSCRIPT https://raw.githubusercontent.com/AdvaniaDC/hpcflow-snapshot/master/hpcflow-snapshot
 ADC_CURLSTAT=$?
-print_result $ADC_CURLSTAT -1
-
 
 diff -q "$ADC_SCRIPT" "$ADC_NEWSCRIPT" &>/dev/null
 ADC_SCRIPT_DIFF=$?
+print_result $ADC_SCRIPT_DIFF "NO"
+
 if [ $ADC_SCRIPT_DIFF -eq 1 ] && [ $ADC_CURLSTAT -eq 0 ];
 then
-        echo 'Your script is not up to date.'
-       	read -ep 'Update now? [y/n]'
+       	read -ep '  Update now? [y/n] '
        	if [[ $REPLY =~ ^[Yy]$ ]];
        	then
-               	mv --backup=t "$ADC_SCRIPT" "$ADC_SCRIPT'-old'"
+               	mv --backup=t "$ADC_SCRIPT" "${ADC_SCRIPT}_old"
                	mv "$ADC_NEWSCRIPT" "$ADC_SCRIPT"
                	chmod +x "$ADC_SCRIPT"
 		exec "$ADC_SCRIPT" "$@"
+		exit 0
 	fi
 fi
-
-exit 1
 
 print_title "Setting HPCFlow environment"
 
@@ -351,4 +349,4 @@ print_result $?
 print_title "Glance image report"
 cat ${ADC_OUTPUT}_upload
 
-printf "\n Done\n\n" 
+printf "\n Done\n\n"
