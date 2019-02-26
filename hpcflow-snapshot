@@ -1,0 +1,310 @@
+#!/bin/bash
+
+### Basic Configuration
+ADC_SNAPSHOT_ROOT=/tmp/adv-snapshots
+mkdir -p $ADC_SNAPSHOT_ROOT
+ADC_SNAPSHOT_TARS=$ADC_SNAPSHOT_ROOT/tars
+ADC_IMAGE_RAW=$ADC_SNAPSHOT_ROOT/image.raw
+ADC_IMAGE_QCOW2=$ADC_SNAPSHOT_ROOT/image.qcow2
+ADC_IMAGE_MOUNT=$ADC_SNAPSHOT_ROOT/mnt
+ADC_OUTPUT=$ADC_SNAPSHOT_ROOT/run.out
+ADC_ERROR=$ADC_SNAPSHOT_ROOT/run.err
+
+# Colors for terminal output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[1;34m'
+NC='\033[0m'
+
+# Print a section title
+print_title () {
+	let ADC_SPAD=${#1}+2
+	printf "\n${BLUE}%.*s\n" $ADC_SPAD "----------------------------------------------------------------------"
+	printf "${BLUE} %s\n" "$1"
+	printf "%s\n" "$1" >> $ADC_OUTPUT
+	printf "%.*s${NC}\n" $ADC_SPAD "----------------------------------------------------------------------"
+	printf "%.*s\n" $ADC_SPAD "----------------------------------------------------------------------" >> $ADC_OUTPUT
+}
+
+# Print a padded message where a result (OK|FAIL) will be printed on the end
+print_message () {
+	let ADC_SPAD=70-${#1}
+	printf " %s %.*s " "$1" $ADC_SPAD "----------------------------------------------------------------------"
+	printf " %s %.*s " "$1" $ADC_SPAD "----------------------------------------------------------------------" >> $ADC_OUTPUT
+}
+
+# Print colored resultes at the end of a message (OK or FAIL)
+print_result () {
+	if [ $1 -eq 0 ]
+	then
+		printf "%s${GREEN}OK${NC}\n" 
+		printf "%sOK\n" >> $ADC_OUTPUT
+	else
+		printf "%s${RED}FAIL${NC}\n"
+		printf "%sFAIL\n" >> $ADC_OUTPUT
+		cat $ADC_ERROR
+		exit 1
+	fi
+}
+
+# Request user input to setup environment variables needed to connect to the glance image store
+set_os_environ () {
+
+	printf " Please enter your HPCFlow project name: "
+	read -r OS_PROJECT_INPUT 
+	export OS_PROJECT_NAME=$OS_PROJECT_INPUT
+
+	printf " Please enter your HPCFlow username: "
+	read -r OS_USERNAME_INPUT
+	export OS_USERNAME=$OS_USERNAME_INPUT
+
+	printf " Please enter your HPCFlow password: "
+	read -sr OS_PASSWORD_INPUT
+	export OS_PASSWORD=$OS_PASSWORD_INPUT
+
+	export OS_AUTH_URL=https://identity.hpc.is/v3
+	export OS_USER_DOMAIN_NAME="Default"
+	export OS_PROJECT_DOMAIN_ID="default"
+	export OS_REGION_NAME="is-1"
+	export OS_INTERFACE=public
+	export OS_IDENTITY_API_VERSION=3
+
+	unset OS_TENANT_ID
+	unset OS_TENANT_NAME
+
+	echo ""
+	if [ -z "$OS_USERNAME" ] || [ -z "$OS_PASSWORD" ] || [ -z "$OS_AUTH_URL" ] || [ -z "$OS_PROJECT_NAME" ]
+	then
+		printf "\n${RED} ***${NC} ERROR: HPCFlow environment not set properly, exiting!\n"
+		exit 1
+	fi
+}
+
+print_title "Setting HPCFlow environment"
+
+# Make sure the the HPCFlow API variables are set, request them if they are not
+if [ -z "$OS_USERNAME" ] || [ -z "$OS_PASSWORD" ] || [ -z "$OS_AUTH_URL" ] || [ -z "$OS_PROJECT_NAME" ]
+then
+	set_os_environ
+fi
+
+
+printf " Enter name to give the image: "
+read -r ADC_IMAGE_NAME_INPUT
+export ADC_IMAGE_NAME=$ADC_IMAGE_NAME_INPUT
+
+print_message "Adding OpenStack repo for glance"
+yum install -q -y centos-release-openstack-queens.x86_64 >> $ADC_OUTPUT 2>$ADC_ERROR
+print_result $?
+
+print_message "Installing required packages"
+yum install -q -y kpartx parted python2-glanceclient >> $ADC_OUTPUT 2>$ADC_ERROR >> $ADC_OUTPUT 2>$ADC_ERROR
+print_result $?
+
+print_message "Testing connection to glance"
+glance image-list >/dev/null 2>$ADC_ERROR
+print_result $?
+
+print_message "Creating temporary directory to backup into"
+mkdir -p $ADC_SNAPSHOT_TARS
+print_result $?
+
+print_title "Backing up existing partitions with labels: boot, EFI and primary"
+
+for part in boot EFI primary
+do
+	PARTPATH=$(mount -l|grep "\[$part\]"|awk '{print $3}')
+
+	if [ "$PARTPATH" != "" ]
+	then
+		print_message "Backing up $PARTPATH "
+		tar cf $ADC_SNAPSHOT_TARS/$part.tar -C $PARTPATH --preserve-permissions --preserve-order --sparse --selinux --acls --xattrs --numeric-owner --one-file-system \
+		  --exclude=$ADC_SNAPSHOT_TARS/* \
+		  --exclude=./tmp/* \
+		  --exclude=./proc/* \
+		  --exclude=./var/tmp/* \
+		  --exclude=./var/lib/cloud \
+		  . >> $ADC_OUTPUT 2>&1
+		print_result $?
+
+	else
+		printf "${RED}***${NC} ERROR: partition label '$part' not found, exiting\n"
+		exit 1
+	fi
+done
+
+EFI_UUID=$(blkid /dev/sda* | grep 'LABEL="EFI"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["-]//g')
+boot_UUID=$(blkid /dev/sda* | grep 'LABEL="boot"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["]//g')
+primary_UUID=$(blkid /dev/sda* | grep 'LABEL="primary"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["]//g')
+
+
+print_title "Creating raw disk image"
+
+# Calculate how big the image needs to be
+IMAGE_SIZE=$(du -sB1 /tmp/adv-snapshots/tars/ | awk '{print $1}')
+let "IMAGE_SIZE=$IMAGE_SIZE+1346434048"
+
+# Remove any existing disk image
+rm -f $ADC_IMAGE_RAW >> $ADC_OUTPUT 2>$ADC_ERROR
+
+print_message "Creating raw disk "
+fallocate -l $IMAGE_SIZE $ADC_IMAGE_RAW
+print_result $?
+
+print_message "  Creating GPT partition table"
+parted $ADC_IMAGE_RAW --script -- mklabel gpt
+print_result $?
+
+print_message "  Adding EFI partition"
+parted $ADC_IMAGE_RAW --script -- mkpart primary fat16 0% 211MB
+print_result $?
+
+print_message "  Adding boot partition"
+parted $ADC_IMAGE_RAW --script -- mkpart primary ext4 211MB 1285MB
+print_result $?
+
+print_message "  Adding primary partition"
+parted $ADC_IMAGE_RAW --script -- mkpart primary xfs 1285MB 100%
+print_result $?
+
+print_message "  Marking EFI partition as bootable"
+parted $ADC_IMAGE_RAW --script -- set 1 boot on
+print_result $?
+
+print_message "  Setting EFI partition name"
+parted $ADC_IMAGE_RAW --script -- name 1 EFI
+print_result $?
+
+print_message "  Setting boot partition name"
+parted $ADC_IMAGE_RAW --script -- name 2 boot
+print_result $?
+
+print_message "  Setting primary partition name"
+parted $ADC_IMAGE_RAW --script -- name 3 primary
+print_result $?
+
+
+print_title "Restore data into raw disk image"
+
+mkdir -p $ADC_IMAGE_MOUNT
+
+echo " Mapping partitions"
+for KPART_MAP in $(kpartx -av $ADC_IMAGE_RAW | awk '{print $3}')
+do
+	DEVMAP=/dev/mapper/$KPART_MAP
+	#echo $KPART_MAP
+
+	if [[ "$KPART_MAP" == *"p1" ]]
+	then
+		printf "  EFI:\n"
+		print_message "  Creating EFI filesystem"
+		mkfs.vfat -n EFI -i $EFI_UUID $DEVMAP >> $ADC_OUTPUT
+		print_result $?
+
+		print_message "  Mounting EFI filesystem"
+		mkdir -p $ADC_IMAGE_MOUNT/p1
+		mount $DEVMAP $ADC_IMAGE_MOUNT/p1
+		print_result $?
+
+		print_message "  Restoring tar backup of EFI partition"
+		tar xf $ADC_SNAPSHOT_TARS/EFI.tar -C $ADC_IMAGE_MOUNT/p1 --warning=no-timestamp
+		print_result $?
+
+		print_message "  Unmounting EFI filesystem"
+		umount $ADC_IMAGE_MOUNT/p1
+		print_result $?
+
+		print_message "  Removing EFI tar file"
+		rm -f $ADC_SNAPSHOT_TARS/EFI.tar
+		print_result $?
+	elif [[ "$KPART_MAP" == *"p2" ]]
+	then
+		printf "  boot:\n"
+		print_message "  Creating boot filesystem"
+		mkfs -t ext4 -U $boot_UUID -L boot -q $DEVMAP >> $ADC_OUTPUT
+		print_result $?
+
+		print_message "  Mounting boot filesystem"
+		mkdir -p $ADC_IMAGE_MOUNT/p2
+		mount $DEVMAP $ADC_IMAGE_MOUNT/p2
+		print_result $?
+
+		print_message "  Restoring tar backup of boot partition"
+		tar xf $ADC_SNAPSHOT_TARS/boot.tar -C $ADC_IMAGE_MOUNT/p2 --warning=no-timestamp
+		print_result $?
+
+		print_message "  Unmounting boot filesystem"
+		umount $ADC_IMAGE_MOUNT/p2
+		print_result $?
+
+		print_message "  Removing boot tar file"
+		rm -f $ADC_SNAPSHOT_TARS/boot.tar
+		print_result $?
+	else
+		printf "  primary:\n"
+		print_message "  Creating primary filesystem"
+		mkfs -t xfs -m uuid=$primary_UUID -L primary $DEVMAP >> $ADC_OUTPUT
+		print_result $?
+
+		print_message "  Mounting primary filesystem"
+		mkdir -p $ADC_IMAGE_MOUNT/p3
+		mount -o nouuid $DEVMAP $ADC_IMAGE_MOUNT/p3
+		print_result $?
+
+		print_message "  Restoring tar backup of primary partition"
+		tar xf $ADC_SNAPSHOT_TARS/primary.tar -C $ADC_IMAGE_MOUNT/p3 --warning=no-timestamp
+		print_result $?
+
+		print_message "  Clearing 70-persistent-net.rules"
+		> $ADC_IMAGE_MOUNT/p3/etc/udev/rules.d/70-persistent-net.rules
+		print_result $?
+
+		print_message "  Clearing 75-persistent-net-generator.rules"
+		> $ADC_IMAGE_MOUNT/p3/etc/udev/rules.d/75-persistent-net-generator.rules
+		print_result $?
+
+		print_message "  Clearing MAC address from eno49"
+		sed -i '/HWADDR=.*/d' $ADC_IMAGE_MOUNT/p3/etc/sysconfig/network-scripts/ifcfg-eno49
+		print_result $?
+		
+		print_message "  Removing existing SSH host keys"
+		rm -f $ADC_IMAGE_MOUNT/p3/etc/ssh/ssh_host_*
+		print_result $?
+
+		print_message "  Unmounting primary filesystem"
+		umount $ADC_IMAGE_MOUNT/p3
+		print_result $?
+
+		print_message "  Removing primary tar file"
+		rm -f $ADC_SNAPSHOT_TARS/primary.tar
+		print_result $?
+	fi
+
+done
+
+print_message "Unmapping partitions"
+kpartx -d $ADC_IMAGE_RAW >> $ADC_OUTPUT 2>&1
+print_result $?
+
+print_title "Converting raw disk image and uploading"
+
+print_message "Creating compressed QCOW2 image"
+qemu-img convert -f raw -O qcow2 -c $ADC_IMAGE_RAW $ADC_IMAGE_QCOW2
+print_result $?
+
+print_message "Removing raw disk image"
+rm -f $ADC_IMAGE_RAW
+print_result $?
+
+print_message "Uploading image to HPCFlow"
+glance --os-image-api-version 1 image-create --store swift --name $ADC_IMAGE_NAME  --disk-format qcow2  --file $ADC_IMAGE_QCOW2  --container-format bare --property "hw-firmware-type=uefi" 2>$ADC_ERROR | tee -a $ADC_OUTPUT > ${ADC_OUTPUT}_upload
+print_result $?
+
+print_message "Removing image file"
+rm -f $ADC_IMAGE_RAW
+print_result $?
+
+print_title "Glance image report"
+cat ${ADC_OUTPUT}_upload
+
+printf "\n Done\n\n" 
