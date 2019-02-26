@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 ### Basic Configuration
 ADC_SNAPSHOT_ROOT=/tmp/adv-snapshots
 mkdir -p $ADC_SNAPSHOT_ROOT
@@ -15,6 +16,12 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[1;34m'
 NC='\033[0m'
+
+# Print error message and exit
+error () {
+	printf "\n${RED} ***${NC} ERROR: $1, exiting!\n\n"
+	exit 1
+}
 
 # Print a section title
 print_title () {
@@ -39,11 +46,15 @@ print_result () {
 	then
 		printf "%s${GREEN}OK${NC}\n" 
 		printf "%sOK\n" >> $ADC_OUTPUT
-	else
+	elif [ $1 -ne 0 ] && [ -z $2 ]
+	then
 		printf "%s${RED}FAIL${NC}\n"
 		printf "%sFAIL\n" >> $ADC_OUTPUT
 		cat $ADC_ERROR
 		exit 1
+	else   
+		printf "%s${RED}FAIL${NC}\n"
+		printf "%sFAIL\n" >> $ADC_OUTPUT
 	fi
 }
 
@@ -79,6 +90,39 @@ set_os_environ () {
 		exit 1
 	fi
 }
+
+if [[ $EUID -ne 0 ]]; then
+   error "This script must be run as root"
+   exit 1
+fi
+
+print_title "Checking for updates to the hpcflow-snapshot script"
+
+ADC_SCRIPT=$0
+ADC_NEWSCRIPT=$ADC_SNAPSHOT_ROOT/newscript
+
+print_message "Downloading latest version"
+curl -s -o $ADC_NEWSCRIPT https://raw.githubusercontent.com/AdvaniaDC/hpcflow-snapshot/master/hpcflow-snapshot
+ADC_CURLSTAT=$?
+print_result $ADC_CURLSTAT -1
+
+
+diff -q "$ADC_SCRIPT" "$ADC_NEWSCRIPT" &>/dev/null
+ADC_SCRIPT_DIFF=$?
+if [ $ADC_SCRIPT_DIFF -eq 1 ] && [ $ADC_CURLSTAT -eq 0 ];
+then
+        echo 'Your script is not up to date.'
+       	read -ep 'Update now? [y/n]'
+       	if [[ $REPLY =~ ^[Yy]$ ]];
+       	then
+               	mv --backup=t "$ADC_SCRIPT" "$ADC_SCRIPT'-old'"
+               	mv "$ADC_NEWSCRIPT" "$ADC_SCRIPT"
+               	chmod +x "$ADC_SCRIPT"
+		exec "$ADC_SCRIPT" "$@"
+	fi
+fi
+
+exit 1
 
 print_title "Setting HPCFlow environment"
 
