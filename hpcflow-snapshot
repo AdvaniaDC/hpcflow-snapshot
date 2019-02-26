@@ -342,8 +342,12 @@ print_message "Uploading image to HPCFlow"
 glance --os-image-api-version 1 image-create --store swift --name $ADC_IMAGE_NAME  --disk-format qcow2  --file $ADC_IMAGE_QCOW2  --container-format bare --property "hw-firmware-type=uefi" 2>$ADC_ERROR | tee -a $ADC_OUTPUT > ${ADC_OUTPUT}_upload
 print_result $?
 
-print_message "Removing image file"
+print_message "Removing raw image file"
 rm -f $ADC_IMAGE_RAW
+print_result $?
+
+print_message "Removing qcow2 image file"
+rm -f $ADC_IMAGE_QCOW2
 print_result $?
 
 print_title "Glance image report"
