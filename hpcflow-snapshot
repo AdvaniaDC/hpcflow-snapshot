@@ -136,7 +136,7 @@ read -r ADC_IMAGE_NAME_INPUT
 export ADC_IMAGE_NAME=$ADC_IMAGE_NAME_INPUT
 
 print_message "Adding OpenStack repo for glance"
-yum install -q -y centos-release-openstack-queens.x86_64 >> $ADC_OUTPUT 2>$ADC_ERROR
+yum install -q -y centos-release-openstack-queens >> $ADC_OUTPUT 2>$ADC_ERROR
 print_result $?
 
 print_message "Installing required packages"
