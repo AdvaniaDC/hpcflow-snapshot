@@ -168,7 +168,21 @@ do
 		  --exclude=./run/* \
 		  --exclude=./proc/* \
 		  --exclude=./var/tmp/* \
+		  --exclude=./root/.bash_history \
+		  --exclude=./home/centos/.bash_history \
 		  --exclude=./var/lib/cloud \
+		  --exclude=./var/cache/* \
+		  --exclude=./var/log/*.log* \
+		  --exclude=./var/log/anaconda/* \
+		  --exclude=./var/log/audit/* \
+		  --exclude=./var/log/cron* \
+		  --exclude=./var/log/dmesg* \
+		  --exclude=./var/log/messages* \
+		  --exclude=./var/log/secure* \
+		  --exclude=./var/log/lastlog* \
+		  --exclude=./var/log/wtmp* \
+		  --exclude=./var/log/maillog* \
+		  --exclude=./var/lib/yum/uuid \
 		  . >> $ADC_OUTPUT 2>&1
 		print_result $?
 
@@ -310,6 +324,10 @@ do
 
 		print_message "  Clearing MAC address from eno49"
 		sed -i '/HWADDR=.*/d' $ADC_IMAGE_MOUNT/p3/etc/sysconfig/network-scripts/ifcfg-eno49
+		print_result $?
+		
+		print_message "  Clearing MAC address from eno50"
+		sed -i '/HWADDR=.*/d' $ADC_IMAGE_MOUNT/p3/etc/sysconfig/network-scripts/ifcfg-eno50
 		print_result $?
 		
 		print_message "  Removing existing SSH host keys"
