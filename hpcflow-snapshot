@@ -169,6 +169,7 @@ do
 		  --exclude=./proc/* \
 		  --exclude=./var/tmp/* \
 		  --exclude=./root/.bash_history \
+		  --exclude=./root/.glanceclient \
 		  --exclude=./home/centos/.bash_history \
 		  --exclude=./var/lib/cloud \
 		  --exclude=./var/cache/* \
