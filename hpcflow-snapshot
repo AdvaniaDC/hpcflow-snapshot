@@ -159,15 +159,15 @@ do
 
 	if [ "$DEVPATH" == "" ]
 	then
-		if [ $part="EFI" ]
+		if [ $part == "EFI" ]
 		then
 			DEVPATH=sda1
 		fi
-		if [ $part="boot" ]
+		if [ $part == "boot" ]
 		then
 			DEVPATH=sda2
 		fi
-		if [ $part="primary" ]
+		if [ $part == "primary" ]
 		then
 			DEVPATH=sda3
 		fi
