@@ -216,6 +216,9 @@ done
 #boot_UUID=$(blkid /dev/sda* | grep 'LABEL="boot"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["]//g')
 #primary_UUID=$(blkid /dev/sda* | grep 'LABEL="primary"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["]//g')
 
+EFI_UUID=$(echo $EFI_UUID | sed 's/["-]//g')
+boot_UUID=$(echo $boot_UUID | sed 's/["]//g')
+primary_UUID=$(echo $primary_UUID | sed 's/["]//g')
 
 print_title "Creating raw disk image"
 
