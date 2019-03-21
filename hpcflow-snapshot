@@ -102,7 +102,7 @@ ADC_SCRIPT=$0
 ADC_NEWSCRIPT=$ADC_SNAPSHOT_ROOT/newscript
 
 print_message "Checking if latest version"
-curl -s -o $ADC_NEWSCRIPT https://raw.githubusercontent.com/AdvaniaDC/hpcflow-snapshot/master/hpcflow-snapshot
+curl -s -H 'Cache-Control: no-cache' -o $ADC_NEWSCRIPT https://raw.githubusercontent.com/AdvaniaDC/hpcflow-snapshot/master/hpcflow-snapshot
 ADC_CURLSTAT=$?
 
 diff -q "$ADC_SCRIPT" "$ADC_NEWSCRIPT" &>/dev/null
