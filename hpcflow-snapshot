@@ -156,6 +156,23 @@ print_title "Backing up existing partitions with labels: boot, EFI and primary"
 for part in boot EFI primary
 do
 	DEVPATH=$(blkid /dev/sda*|grep "$part"|awk '{print $1}'|sed 's/://')
+
+	if [ "$DEVPATH" == "" ]
+	then
+		if [ $part="EFI" ]
+		then
+			DEVPATH=sda1
+		fi
+		if [ $part="boot" ]
+		then
+			DEVPATH=sda2
+		fi
+		if [ $part="primary" ]
+		then
+			DEVPATH=sda3
+		fi
+	fi
+
 	PARTPATH=$(mount | grep $DEVPATH | awk '{print $3}')
 
 	if [ "$PARTPATH" != "" ]
