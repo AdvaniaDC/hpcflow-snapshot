@@ -175,6 +175,8 @@ do
 
 	PARTPATH=$(mount | grep $DEVPATH | awk '{print $3}')
 
+	declare ${part}_UUID=$(blkid /dev/sda* | grep $DEVPATH | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["-]//g')
+
 	if [ "$PARTPATH" != "" ]
 	then
 		print_message "Backing up $PARTPATH "
@@ -210,9 +212,9 @@ do
 	fi
 done
 
-EFI_UUID=$(blkid /dev/sda* | grep 'LABEL="EFI"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["-]//g')
-boot_UUID=$(blkid /dev/sda* | grep 'LABEL="boot"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["]//g')
-primary_UUID=$(blkid /dev/sda* | grep 'LABEL="primary"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["]//g')
+#EFI_UUID=$(blkid /dev/sda* | grep 'LABEL="EFI"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["-]//g')
+#boot_UUID=$(blkid /dev/sda* | grep 'LABEL="boot"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["]//g')
+#primary_UUID=$(blkid /dev/sda* | grep 'LABEL="primary"' | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["]//g')
 
 
 print_title "Creating raw disk image"
