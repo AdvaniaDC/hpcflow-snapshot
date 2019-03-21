@@ -161,15 +161,15 @@ do
 	then
 		if [ $part == "EFI" ]
 		then
-			DEVPATH=sda1
+			DEVPATH=/dev/sda1
 		fi
 		if [ $part == "boot" ]
 		then
-			DEVPATH=sda2
+			DEVPATH=/dev/sda2
 		fi
 		if [ $part == "primary" ]
 		then
-			DEVPATH=sda3
+			DEVPATH=/dev/sda3
 		fi
 	fi
 
