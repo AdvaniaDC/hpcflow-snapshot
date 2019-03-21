@@ -175,7 +175,7 @@ do
 
 	PARTPATH=$(mount | grep $DEVPATH | awk '{print $3}')
 
-	declare ${part}_UUID=$(blkid /dev/sda* | grep $DEVPATH | grep -o -P " UUID=\".*?\" " | cut -d= -f2 | sed 's/["-]//g')
+	declare ${part}_UUID=$(blkid /dev/sda* | grep $DEVPATH | grep -o -P " UUID=\".*?\" " | cut -d= -f2
 
 	if [ "$PARTPATH" != "" ]
 	then
