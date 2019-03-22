@@ -63,11 +63,11 @@ cleanup () {
 
 	print_message "Umounting partitions"
 	umount $ADC_IMAGE_MOUNT/* >> $ADC_OUTPUT 2>&1
-	print_result $?
+	print_result 0
 
 	print_mesage "Removing devmaps"
 	kpartx -d $ADC_IMAGE_RAW >> $ADC_OUTPUT 2>&1
-	print_result $?
+	print_result 0
 }
 
 trap cleanup ERR SIGTERM SIGINT
