@@ -23,6 +23,13 @@ error () {
 	exit 1
 }
 
+cleanup () {
+	umount $ADC_IMAGE_MOUNT/* >> $ADC_OUTPUT 2>&1
+	kpartx -d $ADC_IMAGE_RAW >> $ADC_OUTPUT 2>&1
+}
+
+trap 'cleanup' ERR
+
 # Print a section title
 print_title () {
 	let ADC_SPAD=${#1}+2
