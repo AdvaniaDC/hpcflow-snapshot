@@ -70,7 +70,7 @@ cleanup () {
 	print_result $?
 }
 
-trap cleanup ERR SIGTERM SIGINT EXIT
+trap cleanup ERR SIGTERM SIGINT
 
 
 # Request user input to setup environment variables needed to connect to the glance image store
