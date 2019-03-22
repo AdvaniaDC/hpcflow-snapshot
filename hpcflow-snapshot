@@ -23,13 +23,6 @@ error () {
 	exit 1
 }
 
-cleanup () {
-	umount $ADC_IMAGE_MOUNT/* >> $ADC_OUTPUT 2>&1
-	kpartx -d $ADC_IMAGE_RAW >> $ADC_OUTPUT 2>&1
-}
-
-trap 'cleanup' ERR
-
 # Print a section title
 print_title () {
 	let ADC_SPAD=${#1}+2
@@ -64,6 +57,21 @@ print_result () {
 		printf "${2}\n" >> $ADC_OUTPUT
 	fi
 }
+
+cleanup () {
+	print_title "Running cleanup tasks"
+
+	print_message "Umounting partitions"
+	umount $ADC_IMAGE_MOUNT/* >> $ADC_OUTPUT 2>&1
+	print_result $?
+
+	print_mesage "Removing devmaps"
+	kpartx -d $ADC_IMAGE_RAW >> $ADC_OUTPUT 2>&1
+	print_result $?
+}
+
+trap 'cleanup' ERR SIGTERM
+
 
 # Request user input to setup environment variables needed to connect to the glance image store
 set_os_environ () {
